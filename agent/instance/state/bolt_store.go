@@ -1,4 +1,4 @@
-package store
+package state
 
 import (
 	"errors"
@@ -17,21 +17,21 @@ var (
 
 var errNotFound = errors.New("")
 
-// A BoltStore uses boltdb to implement the Storer interface.
+// A BoltStateStore uses boltdb to implement the Storer interface.
 // All entities are stored using the msgpack encoding.
-type BoltStore struct {
+type BoltStateStore struct {
 	db *bolt.DB
 }
 
-func NewBoltStore(db *bolt.DB) (*BoltStore, error) {
+func NewBoltStateStore(db *bolt.DB) (*BoltStateStore, error) {
 	err := db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(instanceBucketName)
 		return err
 	})
-	return &BoltStore{db: db}, err
+	return &BoltStateStore{db: db}, err
 }
 
-func (s *BoltStore) Add(instance *instance.Instance, config *instance.Config) error {
+func (s *BoltStateStore) Add(instance *instance.Instance, config *instance.Config) error {
 	idata, err := msgpack.Marshal(instance)
 	if err != nil {
 		return err
@@ -64,7 +64,7 @@ func (s *BoltStore) Add(instance *instance.Instance, config *instance.Config) er
 	return err
 }
 
-func (s *BoltStore) Remove(id uint32) error {
+func (s *BoltStateStore) Remove(id uint32) error {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		allInstanceBkt := tx.Bucket(instanceBucketName)
 		allInstanceBkt.DeleteBucket(idToBytes(id))
@@ -74,7 +74,7 @@ func (s *BoltStore) Remove(id uint32) error {
 	return err
 }
 
-func (s *BoltStore) Get(id uint32) (*instance.Instance, error) {
+func (s *BoltStateStore) Get(id uint32) (*instance.Instance, error) {
 	var i instance.Instance
 
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -99,7 +99,7 @@ func (s *BoltStore) Get(id uint32) (*instance.Instance, error) {
 	return &i, nil
 }
 
-func (s *BoltStore) GetConfig(id uint32) (*instance.Config, error) {
+func (s *BoltStateStore) GetConfig(id uint32) (*instance.Config, error) {
 	var c instance.Config
 
 	err := s.db.View(func(tx *bolt.Tx) error {
@@ -122,6 +122,53 @@ func (s *BoltStore) GetConfig(id uint32) (*instance.Config, error) {
 	}
 
 	return &c, nil
+}
+
+func (s *BoltStateStore) SetContainerId(id uint32, containerId string) (bool, error) {
+	mapper := func(instance *instance.Instance) {
+		instance.ContainerId = containerId
+	}
+	return s.updateInstance(id, mapper)
+}
+
+func (s *BoltStateStore) updateInstance(id uint32, mapper func(*instance.Instance)) (bool, error) {
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		allInstanceBkt := tx.Bucket(instanceBucketName)
+		instanceBkt := allInstanceBkt.Bucket(idToBytes(id))
+		if instanceBkt == nil {
+			return errNotFound
+		}
+
+		var i instance.Instance
+		data := instanceBkt.Get(instanceKey)
+		err := msgpack.Unmarshal(data, &i)
+		if err != nil {
+			return err
+		}
+
+		mapper(&i)
+
+		data, err = msgpack.Marshal(&i)
+		if err != nil {
+			return err
+		}
+		err = instanceBkt.Put(instanceKey, data)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if errors.Is(err, errNotFound) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func idToBytes(id uint32) []byte {

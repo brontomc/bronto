@@ -1,4 +1,4 @@
-package store
+package state
 
 import (
 	"os"
@@ -10,11 +10,12 @@ import (
 )
 
 func TestBoltStore(t *testing.T) {
-	file, err := os.CreateTemp("/tmp", "agent.db")
+	file, err := os.CreateTemp("", "agent.db")
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
+	defer os.Remove(file.Name())
 
 	db, err := bbolt.Open(file.Name(), 0600, nil)
 	if err != nil {
@@ -22,7 +23,7 @@ func TestBoltStore(t *testing.T) {
 	}
 	defer db.Close()
 
-	s, err := NewBoltStore(db)
+	s, err := NewBoltStateStore(db)
 	assert.Nil(t, err, "Error while creating a new BoltStore should be nil")
 
 	i, err := s.Get(1238)
@@ -45,12 +46,20 @@ func TestBoltStore(t *testing.T) {
 	assert.Nil(t, err, "Error while adding an instance should be nil")
 
 	queriedInstance, err := s.Get(expectedInstance.Id)
-	assert.Nil(t, err, "Error while querying an instance should be nil")
 	assert.Equal(t, &expectedInstance, queriedInstance, "Inserted instance must be the same as queried instance")
+	assert.Nil(t, err, "Error while querying an instance should be nil")
 
 	queriedConfig, err := s.GetConfig(expectedInstance.Id)
-	assert.Nil(t, err, "Error while querying a config should be nil")
 	assert.Equal(t, &expectedConfig, queriedConfig, "Inserted config must be the same as queried instance")
+	assert.Nil(t, err, "Error while querying a config should be nil")
+
+	newContainerId := "UwuUpdated"
+	found, err := s.SetContainerId(expectedInstance.Id, newContainerId)
+	assert.True(t, found, "Instance should have been found")
+	assert.Nil(t, err, "Error while setting the container id should be nil")
+	queriedInstance, err = s.Get(expectedInstance.Id)
+	assert.Equal(t, newContainerId, queriedInstance.ContainerId, "New container id should be the same as the queried one")
+	assert.Nil(t, err, "Error while querying an instance should be nil")
 
 	err = s.Remove(expectedInstance.Id)
 	assert.Nil(t, err, "Error while removing an instance should be nil")
