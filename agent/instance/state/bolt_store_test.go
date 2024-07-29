@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/brontomc/bronto/agent/instance"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/bbolt"
 )
@@ -30,12 +29,12 @@ func TestBoltStore(t *testing.T) {
 	assert.Nil(t, i, "Instance should not exist in store")
 	assert.Nil(t, err, "Error while querying store should be nil")
 
-	expectedInstance := instance.Instance{
+	expectedInstance := Instance{
 		Id:          69,
-		Status:      instance.Starting,
+		Status:      Starting,
 		ContainerId: "uwuId",
 	}
-	expectedConfig := instance.Config{
+	expectedConfig := Config{
 		DataDirectory: "/wtf",
 		ServerJar:     "paper.jar",
 		Args:          []string{"-help"},

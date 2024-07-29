@@ -1,4 +1,4 @@
-package instance
+package state
 
 type Status string
 
@@ -21,9 +21,9 @@ type Config struct {
 }
 
 type Instance struct {
-	// Id represents the internal id of the instance.
+	// Id represents the internal id of the
 	Id uint32
-	// Status represents the current status of the instance.
+	// Status represents the current status of the
 	Status Status
 	// ContainerId represents the id of the contaienr in which the server is running.
 	// If no container has been created yet ContainerId is empty.

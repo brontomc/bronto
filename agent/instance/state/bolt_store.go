@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/brontomc/bronto/agent/instance"
 	"github.com/vmihailenco/msgpack/v5"
 	bolt "go.etcd.io/bbolt"
 )
@@ -31,7 +30,7 @@ func NewBoltStateStore(db *bolt.DB) (*BoltStateStore, error) {
 	return &BoltStateStore{db: db}, err
 }
 
-func (s *BoltStateStore) Add(instance *instance.Instance, config *instance.Config) error {
+func (s *BoltStateStore) Add(instance *Instance, config *Config) error {
 	idata, err := msgpack.Marshal(instance)
 	if err != nil {
 		return err
@@ -74,8 +73,8 @@ func (s *BoltStateStore) Remove(id uint32) error {
 	return err
 }
 
-func (s *BoltStateStore) Get(id uint32) (*instance.Instance, error) {
-	var i instance.Instance
+func (s *BoltStateStore) Get(id uint32) (*Instance, error) {
+	var i Instance
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		allInstanceBkt := tx.Bucket(instanceBucketName)
@@ -99,8 +98,8 @@ func (s *BoltStateStore) Get(id uint32) (*instance.Instance, error) {
 	return &i, nil
 }
 
-func (s *BoltStateStore) GetConfig(id uint32) (*instance.Config, error) {
-	var c instance.Config
+func (s *BoltStateStore) GetConfig(id uint32) (*Config, error) {
+	var c Config
 
 	err := s.db.View(func(tx *bolt.Tx) error {
 		allInstanceBkt := tx.Bucket(instanceBucketName)
@@ -125,13 +124,13 @@ func (s *BoltStateStore) GetConfig(id uint32) (*instance.Config, error) {
 }
 
 func (s *BoltStateStore) SetContainerId(id uint32, containerId string) (bool, error) {
-	mapper := func(instance *instance.Instance) {
+	mapper := func(instance *Instance) {
 		instance.ContainerId = containerId
 	}
 	return s.updateInstance(id, mapper)
 }
 
-func (s *BoltStateStore) updateInstance(id uint32, mapper func(*instance.Instance)) (bool, error) {
+func (s *BoltStateStore) updateInstance(id uint32, mapper func(*Instance)) (bool, error) {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		allInstanceBkt := tx.Bucket(instanceBucketName)
 		instanceBkt := allInstanceBkt.Bucket(idToBytes(id))
@@ -139,7 +138,7 @@ func (s *BoltStateStore) updateInstance(id uint32, mapper func(*instance.Instanc
 			return errNotFound
 		}
 
-		var i instance.Instance
+		var i Instance
 		data := instanceBkt.Get(instanceKey)
 		err := msgpack.Unmarshal(data, &i)
 		if err != nil {
