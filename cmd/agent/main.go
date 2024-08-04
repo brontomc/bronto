@@ -1,7 +1,14 @@
 package main
 
-import "github.com/brontomc/bronto/agent"
+import (
+	"log"
+
+	"github.com/brontomc/bronto/agent"
+)
 
 func main() {
-	agent.Start()
+	err := agent.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
 }

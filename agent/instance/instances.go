@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/brontomc/bronto/agent/instance/state"
 	"github.com/docker/docker/api/types/container"
@@ -50,6 +52,18 @@ func (i *Instances) AddInstance(id uint32, config *state.Config) error {
 	i.state.Add(instance, config)
 
 	return nil
+}
+
+func (i *Instances) InstanceStatus(id uint32) (*state.Status, error) {
+	instance, err := i.state.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if instance == nil {
+		return nil, ErrInstanceDoesNotExist
+	}
+
+	return &instance.Status, nil
 }
 
 func (i *Instances) RemoveInstance(id uint32) error {
@@ -109,7 +123,7 @@ func (i *Instances) StopInstance(id uint32) error {
 		return err
 	}
 	if instance == nil {
-		return nil
+		return ErrInstanceDoesNotExist
 	}
 
 	if instance.Status != state.Running {
@@ -123,6 +137,77 @@ func (i *Instances) StopInstance(id uint32) error {
 	}
 
 	err = i.state.SetStatus(id, state.Offline)
+
+	return err
+}
+
+func (i *Instances) Logs(id uint32) (<-chan string, error) {
+	instance, err := i.state.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if instance == nil {
+		return nil, ErrInstanceDoesNotExist
+	}
+
+	if instance.Status != state.Running {
+		return nil, ErrInstanceIsNotRunning
+	}
+	opts := container.AttachOptions{
+		Stdout: true,
+		Stderr: true,
+		Stream: true,
+	}
+	resp, err := i.docker.ContainerAttach(i.ctx, instance.ContainerId, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	logCh := make(chan string)
+
+	go func() {
+		for {
+			l, err := resp.Reader.ReadString('\n')
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				slog.Error("Received error while reading from attached container logs", "error", err)
+			}
+			logCh <- l
+		}
+		close(logCh)
+		resp.Close()
+	}()
+
+	return logCh, nil
+}
+
+func (i *Instances) SendCommand(id uint32, command string) error {
+	instance, err := i.state.Get(id)
+	if err != nil {
+		return err
+	}
+	if instance == nil {
+		return nil
+	}
+
+	if instance.Status != state.Running {
+		return ErrInstanceIsNotRunning
+	}
+
+	opts := container.AttachOptions{
+		Stdin: true,
+	}
+	resp, err := i.docker.ContainerAttach(i.ctx, instance.ContainerId, opts)
+	if err != nil {
+		return err
+	}
+	defer resp.Close()
+
+	command, _ = strings.CutSuffix(command, "\n")
+
+	_, err = resp.Conn.Write([]byte(command + "\n"))
 
 	return err
 }
