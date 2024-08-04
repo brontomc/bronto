@@ -3,6 +3,7 @@ package state
 import (
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/vmihailenco/msgpack/v5"
 	bolt "go.etcd.io/bbolt"
@@ -28,6 +29,10 @@ func NewBoltStateStore(db *bolt.DB) (*BoltStateStore, error) {
 		return err
 	})
 	return &BoltStateStore{db: db}, err
+}
+
+func (s *BoltStateStore) Close() error {
+	return s.db.Close()
 }
 
 func (s *BoltStateStore) Add(instance *Instance, config *Config) error {
@@ -98,6 +103,24 @@ func (s *BoltStateStore) Get(id uint32) (*Instance, error) {
 	return &i, nil
 }
 
+func (s *BoltStateStore) List() ([]uint32, error) {
+	ids := []uint32{}
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		allInstanceBkt := tx.Bucket(instanceBucketName)
+		c := allInstanceBkt.Cursor()
+		for id, _ := c.First(); id != nil; id, _ = c.Next() {
+			ids = append(ids, idFromBytes(id))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return ids, nil
+}
+
 func (s *BoltStateStore) GetConfig(id uint32) (*Config, error) {
 	var c Config
 
@@ -123,14 +146,27 @@ func (s *BoltStateStore) GetConfig(id uint32) (*Config, error) {
 	return &c, nil
 }
 
-func (s *BoltStateStore) SetContainerId(id uint32, containerId string) (bool, error) {
+func (s *BoltStateStore) SetContainerId(id uint32, containerId string) error {
 	mapper := func(instance *Instance) {
 		instance.ContainerId = containerId
 	}
 	return s.updateInstance(id, mapper)
 }
 
-func (s *BoltStateStore) updateInstance(id uint32, mapper func(*Instance)) (bool, error) {
+// SetStatus updates the status of the instance.
+// If status is Starting then the instance StartTime should be set to Time.Now()
+func (s *BoltStateStore) SetStatus(id uint32, status Status) error {
+	mapper := func(instance *Instance) {
+		instance.Status = status
+		if status == Starting {
+			now := time.Now()
+			instance.StartTime = &now
+		}
+	}
+	return s.updateInstance(id, mapper)
+}
+
+func (s *BoltStateStore) updateInstance(id uint32, mapper func(*Instance)) error {
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		allInstanceBkt := tx.Bucket(instanceBucketName)
 		instanceBkt := allInstanceBkt.Bucket(idToBytes(id))
@@ -160,17 +196,23 @@ func (s *BoltStateStore) updateInstance(id uint32, mapper func(*Instance)) (bool
 	})
 
 	if errors.Is(err, errNotFound) {
-		return false, nil
+		return nil
 	}
 
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
 func idToBytes(id uint32) []byte {
 	s := strconv.FormatUint(uint64(id), 10)
 	return []byte(s)
+}
+
+func idFromBytes(b []byte) uint32 {
+	s := string(b)
+	id, _ := strconv.ParseUint(s, 10, 32)
+	return uint32(id)
 }

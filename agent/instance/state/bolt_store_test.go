@@ -53,8 +53,7 @@ func TestBoltStore(t *testing.T) {
 	assert.Nil(t, err, "Error while querying a config should be nil")
 
 	newContainerId := "UwuUpdated"
-	found, err := s.SetContainerId(expectedInstance.Id, newContainerId)
-	assert.True(t, found, "Instance should have been found")
+	err = s.SetContainerId(expectedInstance.Id, newContainerId)
 	assert.Nil(t, err, "Error while setting the container id should be nil")
 	queriedInstance, err = s.Get(expectedInstance.Id)
 	assert.Equal(t, newContainerId, queriedInstance.ContainerId, "New container id should be the same as the queried one")

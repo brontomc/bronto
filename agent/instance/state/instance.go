@@ -1,5 +1,7 @@
 package state
 
+import "time"
+
 type Status string
 
 const (
@@ -21,11 +23,13 @@ type Config struct {
 }
 
 type Instance struct {
-	// Id represents the internal id of the
+	// Id represents the internal id of the instance.
 	Id uint32
-	// Status represents the current status of the
+	// Status represents the current status of the instance.
 	Status Status
-	// ContainerId represents the id of the contaienr in which the server is running.
+	// Time when the server was started or nil if the instance is currently not running.
+	StartTime *time.Time
+	// ContainerId represents the id of the container in which the server is running.
 	// If no container has been created yet ContainerId is empty.
 	ContainerId string
 }
