@@ -66,6 +66,18 @@ func (i *Instances) InstanceStatus(id uint32) (*state.Status, error) {
 	return &instance.Status, nil
 }
 
+func (i *Instances) GetInstance(id uint32) (*state.Instance, error) {
+	instance, err := i.state.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if instance == nil {
+		return nil, ErrInstanceDoesNotExist
+	}
+
+	return instance, nil
+}
+
 func (i *Instances) RemoveInstance(id uint32) error {
 	instance, err := i.state.Get(id)
 	if err != nil {
@@ -166,15 +178,21 @@ func (i *Instances) Logs(id uint32) (<-chan string, error) {
 	logCh := make(chan string)
 
 	go func() {
+	READ:
 		for {
-			l, err := resp.Reader.ReadString('\n')
-			if err == io.EOF {
-				break
+			select {
+			case <-i.ctx.Done():
+				break READ
+			default:
+				l, err := resp.Reader.ReadString('\n')
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					slog.Error("Received error while reading from attached container logs", "error", err)
+				}
+				logCh <- l
 			}
-			if err != nil {
-				slog.Error("Received error while reading from attached container logs", "error", err)
-			}
-			logCh <- l
 		}
 		close(logCh)
 		resp.Close()

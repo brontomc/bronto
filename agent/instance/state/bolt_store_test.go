@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.etcd.io/bbolt"
 )
 
 func TestBoltStore(t *testing.T) {
@@ -16,13 +15,7 @@ func TestBoltStore(t *testing.T) {
 	defer file.Close()
 	defer os.Remove(file.Name())
 
-	db, err := bbolt.Open(file.Name(), 0600, nil)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	s, err := NewBoltStateStore(db)
+	s, err := NewBoltStateStore(file.Name())
 	assert.Nil(t, err, "Error while creating a new BoltStore should be nil")
 
 	i, err := s.Get(1238)

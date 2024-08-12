@@ -2,6 +2,7 @@ package state
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -23,8 +24,13 @@ type BoltStateStore struct {
 	db *bolt.DB
 }
 
-func NewBoltStateStore(db *bolt.DB) (*BoltStateStore, error) {
-	err := db.Update(func(tx *bolt.Tx) error {
+func NewBoltStateStore(file string) (*BoltStateStore, error) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error while opening boltdb: %w", err)
+	}
+
+	err = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists(instanceBucketName)
 		return err
 	})
